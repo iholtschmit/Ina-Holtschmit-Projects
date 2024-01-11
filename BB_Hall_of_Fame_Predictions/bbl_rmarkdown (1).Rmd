@@ -1,0 +1,180 @@
+---
+title: "6203 Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r read tables}
+as_data_full<-read.table(file="AllstarFull.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+awards_full<-read.table(file="AwardsSharePlayers.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+batting_full<-read.table(file="Batting.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+positions_full<-read.table(file="Appearances.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+pitching_full<-read.table(file="Pitching.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+hof_full<-read.table(file="HallOfFame.csv", quote="", sep=",", stringsAsFactors = FALSE, header=TRUE)
+```
+
+```{r manipulate tables}
+library(dplyr)
+
+batting_full[is.na(batting_full)]<-0
+#combine seasons played for multiple teams
+batting_yr<-batting_full %>% group_by(playerID, yearID) %>% summarize_at(vars(G, AB, R, H, X2B, X3B, HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP), sum)
+
+#filter out players who played less than 10 years (ineligible for HOF)
+batting_yr_ct<-batting_yr %>% count(playerID)
+batting_keep<-filter(batting_yr_ct, n >= 10)
+
+#eligible for HOF based on playing years
+eligible_batters<-batting_keep %>% left_join(batting_yr,by="playerID")
+
+#filter players who are retired, but still have time on the ballot (final playing year 2006 or earlier)
+bat_max<-eligible_batters %>% group_by(playerID) %>% filter(yearID == max(yearID, na.rm=TRUE))
+final_years<-bat_max %>% select(playerID, yearID)
+maxes<-eligible_batters %>% left_join(final_years,by="playerID")
+hof_2021_stats<-filter(maxes, yearID.y <= 2006)
+hof_2021_stats<-dplyr::rename(hof_2021_stats, finalYear = yearID.y)
+hof_2021_stats<-dplyr::rename(hof_2021_stats, yearID = yearID.x)
+#head(hof_2021_stats)
+
+#sum the first 10 years of stats
+first10_bat_split<-hof_2021_stats %>% arrange(yearID) %>% group_by(playerID) %>% slice(1:10)
+#head(first10_bat_split, n=30)
+max_award_ASb<-first10_bat_split %>% group_by(playerID) %>% filter(yearID == max(yearID, na.rm=TRUE))
+max_award_ASb<-max_award_ASb %>% select(playerID, yearID)
+#head(max_award_ASb)
+first10_bat_data<-first10_bat_split %>% group_by(playerID) %>% summarize_at(vars(G, AB, R, H, X2B, X3B, HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP), sum)
+#head(first10_bat_data)
+
+#add pitching below
+pitching_full[is.na(pitching_full)]<-0
+#combine seasons played for multiple teams
+pitching_yr<-pitching_full %>% group_by(playerID, yearID) %>% summarize_at(vars(W, L, G, GS, CG, SHO, SV, IPouts, H, ER, HR, BB, SO), sum)
+
+#filter out players who played less than 10 years (ineligible for HOF)
+pitching_yr_ct<-pitching_yr %>% count(playerID)
+pitching_keep<-filter(pitching_yr_ct, n >= 10)
+
+#eligible for HOF based on playing years
+eligible_pitchers<-pitching_keep %>% left_join(pitching_yr,by="playerID")
+
+#filter players who are retired, but still have time on the ballot (final playing year 2006 or earlier)
+pitch_max<-eligible_pitchers %>% group_by(playerID) %>% filter(yearID == max(yearID, na.rm=TRUE))
+final_years_p<-pitch_max %>% select(playerID, yearID)
+maxes_p<-eligible_pitchers %>% left_join(final_years_p,by="playerID")
+hof_2021_stats_p<-filter(maxes_p, yearID.y <= 2006)
+hof_2021_stats_p<-dplyr::rename(hof_2021_stats_p, finalYear = yearID.y)
+hof_2021_stats_p<-dplyr::rename(hof_2021_stats_p, yearID = yearID.x)
+#head(hof_2021_stats_p)
+
+#sum the first 10 years of stats
+first10_pitch_split<-hof_2021_stats_p %>% arrange(yearID) %>% group_by(playerID) %>% slice(1:10)
+#head(first10_pitch_split, n=30)
+max_award_ASp<-first10_pitch_split %>% group_by(playerID) %>% filter(yearID == max(yearID, na.rm=TRUE))
+max_award_ASp<-max_award_ASp %>% select(playerID, yearID)
+#head(max_award_ASp)
+first10_pitch_data<-first10_pitch_split %>% group_by(playerID) %>% summarize_at(vars(W, L, G, GS, CG, SHO, SV, IPouts, H, ER, HR, BB, SO), sum)
+#head(first10_pitch_data)
+
+# POSITIONS
+positions_full[is.na(positions_full)]<-0
+#combine seasons played for multiple teams
+positions_yr<-positions_full %>% group_by(playerID, yearID) %>% summarize_at(vars(G_batting, G_defense, G_p, G_c, G_1b, G_2b, G_3b, G_ss, G_lf, G_cf, G_rf, G_of), sum)
+
+#filter out players who played less than 10 years (ineligible for HOF)
+positions_yr_ct<-positions_yr %>% count(playerID)
+positions_keep<-filter(positions_yr_ct, n >= 10)
+
+#eligible for HOF based on playing years
+eligible_positions<-positions_keep %>% left_join(positions_yr,by="playerID")
+#head(eligible_positions)
+
+#sum the first 10 years of stats
+first10_pos_split<-eligible_positions %>% arrange(yearID) %>% group_by(playerID) %>% slice(1:10)
+first10_pos_data<-first10_pos_split %>% group_by(playerID) %>% summarize_at(vars(G_batting, G_defense, G_p, G_c, G_1b, G_2b, G_3b, G_ss, G_lf, G_cf, G_rf, G_of), sum)
+#head(first10_pos_data)
+
+```
+
+```{r rename cols}
+bat_pitch<-first10_bat_data %>% full_join(first10_pitch_data, by="playerID")
+bat_pitch<-dplyr::rename(bat_pitch, Games_b = G.x)
+bat_pitch<-dplyr::rename(bat_pitch, Hits = H.x)
+bat_pitch<-dplyr::rename(bat_pitch, HR = HR.x)
+bat_pitch<-dplyr::rename(bat_pitch, BB_b = BB.x)
+bat_pitch<-dplyr::rename(bat_pitch, SO = SO.x)
+bat_pitch<-dplyr::rename(bat_pitch, Games_p = G.y)
+bat_pitch<-dplyr::rename(bat_pitch, Ha = H.y)
+bat_pitch<-dplyr::rename(bat_pitch, HRa = HR.y)
+bat_pitch<-dplyr::rename(bat_pitch, BB_p = BB.y)
+bat_pitch<-dplyr::rename(bat_pitch, K = SO.y)
+bat_pitch<-bat_pitch %>% replace(is.na(.), 0)
+full_hit_pitch_pos<-bat_pitch %>% left_join(first10_pos_data, by="playerID")
+#head(full_hit_pitch_pos)
+```
+
+```{r join awards, eras, and hof}
+master_filter<-max_award_ASb %>% full_join(max_award_ASp, by="playerID")
+master_filter<-master_filter %>% select(playerID, yearID.x)
+master_filter<-dplyr::rename(master_filter, max_yr = yearID.x)
+
+# filter HOF BBWAA
+hof_player<-filter(hof_full, category == "Player" & inducted == "Y" & votedBy == "BBWAA")
+hof_player<-hof_player %>% select(playerID, inducted)
+
+# get all star game count
+as_data_full<-as_data_full %>% group_by(playerID, yearID) %>% summarise_at(vars(GP), sum)
+as_data_full<-as_data_full %>% left_join(master_filter,by="playerID")
+as_data_red<-filter(as_data_full, yearID <= max_yr)
+all_stars<-as_data_red %>% count("playerID")
+
+# get award shares (MVP, CY Young)
+awards<-filter(awards_full, awardID == "Cy Young" | awardID == "MVP")
+awards$share<-awards$pointsWon/awards$pointsMax
+awards<-awards %>% left_join(master_filter,by="playerID")
+awards_red<-filter(awards, yearID <= max_yr)
+awards_share<-awards_red %>% group_by(playerID, awardID) %>% summarise_at(vars(share), sum)
+
+#add shares
+awards_share$MVP_share<-ifelse(awards_share$awardID == "MVP", awards_share$share, 0)
+awards_share$CY_share<-ifelse(awards_share$awardID == "Cy Young", awards_share$share, 0)
+awards_share<-awards_share %>% group_by(playerID) %>% summarize_at(vars(MVP_share, CY_share), sum)
+#head(awards_share)
+full_shares<-full_hit_pitch_pos %>% left_join(awards_share,by="playerID")
+
+#add AS
+all_stars<-dplyr::rename(all_stars,AS_G = n)
+full_shares_AS<-full_shares %>% left_join(all_stars,by="playerID")
+
+# ERAS
+hof_dataset_eras<-full_shares_AS %>% left_join(master_filter,by="playerID")
+hof_dataset_eras$era<-ifelse(hof_dataset_eras$max_yr <= 1897, "Pioneer", ifelse(hof_dataset_eras$max_yr <= 1924, "Spitball", ifelse(hof_dataset_eras$max_yr <= 1951, "Landis", ifelse(hof_dataset_eras$max_yr <= 1973, "Boomer", ifelse(hof_dataset_eras$max_yr <= 1997, "Turf", "Camden")))))
+hof_dataset_eras$era<-as.factor(hof_dataset_eras$era)
+hof_dataset_eras<-hof_dataset_eras %>% left_join(hof_player,by="playerID")
+hof_dataset_eras<-hof_dataset_eras %>% tidyr::replace_na(list(MVP_share = 0, CY_share = 0, AS_G = 0, inducted = "N"))
+hof_dataset_eras$inducted<-as.factor(hof_dataset_eras$inducted)
+hof_dataset_eras<-select(hof_dataset_eras, -Games_b)
+hof_dataset_eras<-select(hof_dataset_eras, -Games_p)
+hof_dataset_eras<-select(hof_dataset_eras, -max_yr)
+hof_dataset_eras<-select(hof_dataset_eras, -44)
+#head(hof_dataset_eras)
+```
+
+```{r write data files}
+set.seed(44)
+#bbl_data<-read.table(file="cleaned_hof_data_eras.csv", quote="", sep=",", stringsAsFactors = TRUE, header=TRUE)
+hof_dataset_eras$isPitcher<-ifelse(hof_dataset_eras$G_p > 20, "Y", "N")
+hof_dataset_eras$isPitcher<-as.factor(hof_dataset_eras$isPitcher)
+
+#remove outliers
+hof_dataset_eras<-filter(hof_dataset_eras, !(playerID == 'rosepe01' | playerID == 'jacksjo01'))
+
+test_set <- hof_dataset_eras %>% group_by(inducted, isPitcher) %>% sample_frac(size=.2)
+train_set <- dplyr::anti_join(hof_dataset_eras, test_set, by='playerID')
+
+write.csv(train_set,"hof_data_training_set.csv", row.names=FALSE, quote=FALSE)
+write.csv(test_set,"hof_data_test_set.csv", row.names=FALSE, quote=FALSE)
+write.csv(hof_dataset_eras,"cleaned_hof_data_eras.csv", row.names=FALSE, quote=FALSE)
+```

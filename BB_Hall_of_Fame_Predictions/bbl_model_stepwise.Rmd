@@ -1,0 +1,81 @@
+---
+title: "models"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+```{r datasets}
+train_set<-read.table(file="hof_data_training_set.csv", quote="", sep=",", stringsAsFactors = TRUE, header=TRUE)
+test_set<-read.table(file="hof_data_test_set.csv", quote="", sep=",", stringsAsFactors = TRUE, header=TRUE)
+```
+
+```{r stepwise}
+set.seed(44)
+minmod<-glm(inducted~1, data=train_set[,-1], family=binomial)
+maxmod<-glm(inducted~., data=train_set[,-1], family=binomial)
+stepwise_logistic<-step(minmod, list(lower=formula(minmod),upper=formula(maxmod)), direction="both",trace=FALSE)
+summary(stepwise_logistic)
+```
+
+```{r monte carlo logistic for tuning}
+set.seed(44)
+start_t<-Sys.time()
+B<-100
+tot_err<-NULL
+#tot_tp<-NULL
+tot_f1<-NULL
+for (b in 1:B){
+tune_test <- train_set %>% group_by(inducted, isPitcher) %>% sample_frac(size=.2)
+tune_train <- dplyr::anti_join(train_set, tune_test, by='playerID')
+kl<-seq(0.15, 0.85, by = 0.01)
+test_errors<-c()
+#tp_rate<-c()
+f1_score<-c()
+for (i in kl) {
+  logit_mod<-glm(inducted~MVP_share+SHO+SB+AS_G+K+GS+G_c+era+G_cf+IPouts+X2B+Hits+GIDP+SF+AB+G_1b+G_p+HBP, data=tune_train, family=binomial)
+  pred_vals<-predict(logit_mod, tune_test, type="response")
+  preds<-ifelse(pred_vals < i, 'N', 'Y')
+  conf_matrix<-table(preds,tune_test$inducted)
+  tnr<-conf_matrix[1]/(conf_matrix[1]+conf_matrix[2])
+  tpr<-conf_matrix[4]/(conf_matrix[3]+conf_matrix[4])
+  f1<-2*conf_matrix[4]/(2*conf_matrix[4]+conf_matrix[2]+conf_matrix[3])
+  #tp_rate<-append(tp_rate, tpr)
+  f1_score<-append(f1_score, f1)
+  test_errors<-append(test_errors, mean(preds != tune_test$inducted))
+}
+tot_err<-rbind(tot_err, test_errors)
+#tot_tp<-rbind(tot_tp,tp_rate)
+tot_f1<-rbind(tot_f1, f1_score)
+}
+tot_errs<-colMeans(tot_err)
+#tot_tps<-colMeans(tot_tp)
+tot_f1s<-colMeans(tot_f1)
+
+plot(kl,tot_f1s, xlab="threshold", ylab="f1 score", main="f1 score for different probability thresholds")
+best_f1<-which.max(tot_f1s)*0.01+0.14
+best_f1
+plot(kl,tot_errs, xlab="threshold", ylab="error", main="mean error for different probability thresholds")
+abline(h=c(0.028, 0.03, 0.032), col=c("blue", "red", "green"))
+abline(v=best_f1, col="purple")
+legend(x = "topright", legend = c("2.8%", "3.0%", "3.2%", "max f1"), col = c("blue", "red", "green", "purple"), title = "error rate", lwd = 2)
+#plot(kl,tot_tps, xlab="threshold", ylab="tp rate", main="mean tp rate for different probability thresholds")
+end_t<-Sys.time()
+tot_time<-end_t-start_t
+tot_time
+```
+
+```{r test set}
+thresh<-best_f1
+test_pred_vals<-predict(stepwise_logistic, test_set, type="response")
+test_preds<-ifelse(test_pred_vals < i, 'N', 'Y')
+test_error<-mean(test_preds != test_set$inducted)
+test_conf_matrix<-table(test_preds, test_set$inducted)
+test_tpr<-test_conf_matrix[4]/(test_conf_matrix[3]+test_conf_matrix[4])
+test_error
+test_conf_matrix
+test_tpr
+```
